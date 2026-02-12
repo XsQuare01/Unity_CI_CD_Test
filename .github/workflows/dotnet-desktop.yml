@@ -1,0 +1,59 @@
+# 워크플로우 이름 (GitHub Actions 탭에서 보이는 이름)
+name: Unity CI CD Test
+run-name: $${{github.actor}} is testing out GitHub Actions
+
+ # main 브랜치를 대상으로 한 PR일 때만 실행
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false            # 하나 실패해도 다른 매트릭스는 계속 실행
+      matrix:
+        targetPlatform:
+          - StandaloneWindows64   # 빌드 타겟 플랫폼 (Windows 64bit)
+
+    runs-on: windows-latest  # Windows 러너 사용 (Windows 빌드용)
+
+    env:
+      Solution_Name: your-solution-name                         # Replace with your solution name, i.e. MyWpfApp.sln.
+      Test_Project_Path: your-test-project-path                 # Replace with the path to your test project, i.e. MyWpfApp.Tests\MyWpfApp.Tests.csproj.
+      Wap_Project_Directory: your-wap-project-directory-name    # Replace with the Wap project directory relative to the solution, i.e. MyWpfApp.Package.
+      Wap_Project_Path: your-wap-project-path                   # Replace with the path to your Wap project, i.e. MyWpf.App.Package\MyWpfApp.Package.wapproj.
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        lfs: true          # Unity는 LFS 자주 쓰므로 활성화 (대용량 파일용)
+
+      # Unity Library 캐시를 통한 빌드 시간 감소
+    - name: Cache Library
+      uses: actions/cache@v3
+      with:
+        path: Library
+        key: Library-${{ matrix.targetPlatform }}
+        restore-keys: |
+          Library-
+
+    # Unity 빌드 수행
+    # game-ci 공식 액션 사용
+    - name: Build Project
+      uses: game-ci/unity-builder@v4
+      env:
+        # Unity 라이선스 정보
+        UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+        UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      with:
+        targetPlatform: ${{ matrix.targetPlatform }}  # Windows64 빌드
+
+    # 빌드 결과물을 GitHub Artifact로 업로드
+    # PR 단계에서 빌드 성공 여부 확인 가능
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Build-${{ matrix.targetPlatform }}
+        path: build/${{ matrix.targetPlatform }}
